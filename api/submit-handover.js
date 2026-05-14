@@ -112,11 +112,11 @@ export default async function handler(req, res) {
               || medium?.downloadUrl
               // Confirmed pattern: URL-encode publicID (may contain slashes) + original extension
               || (publicID
-                  ? \`\${BASE_URL}/media/secure/external/v2/raw/upload/\${encodeURIComponent(publicID)}.\${origExt}\`
+                  ? `${BASE_URL}/media/secure/external/v2/raw/upload/${encodeURIComponent(publicID)}.${origExt}`
                   : null)
               || resourceInfo?.publicUrl
               || resourceInfo?.url
-              || (mediumId ? \`\${BASE_URL}/media/\${mediumId}\` : null);
+              || (mediumId ? `${BASE_URL}/media/${mediumId}` : null);
 
             // Use original filename from the upload for display — not the API's fileName
             const displayName = file.name;
