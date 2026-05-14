@@ -93,17 +93,21 @@ export default async function handler(req, res) {
           if (uploadRes.ok) {
             const medium   = JSON.parse(uploadText);
             const mediumId = medium?.data?.id || medium?.id;
-            const displayName = file.name;
 
-            console.log(`[submit-handover] Media response keys: ${JSON.stringify(Object.keys(medium?.data || medium || {}))}`);
+            // ✅ Confirmed: resourceInfo.url contains the correct public CDN URL
+            // e.g. https://coles.staffbase.rocks/api/media/secure/external/v2/raw/upload/{hex}.jpg
+            const resourceInfo = medium?.data?.resourceInfo || medium?.resourceInfo;
+            const fileUrl = resourceInfo?.url
+              || medium?.data?.url
+              || medium?.url
+              || `${BASE_URL}/media/${mediumId}`;
+
             console.log(`[submit-handover] mediumId: ${mediumId}`);
-            console.log(`[submit-handover] resourceInfo: ${JSON.stringify(medium?.data?.resourceInfo || medium?.resourceInfo)}`);
-            console.log(`[submit-handover] transformations: ${JSON.stringify(medium?.data?.transformations || medium?.transformations)}`);
+            console.log(`[submit-handover] resourceInfo.url: ${resourceInfo?.url}`);
+            console.log(`[submit-handover] Final URL: ${fileUrl}`);
 
             if (mediumId) {
-              let fileUrl = null;
-
-              // Step 1: Register in File Manager
+              // Register in File Manager (best-effort — PUT only, GET returns 405)
               try {
                 await fetch(`${BASE_URL}/medialibrary/entries/${mediumId}`, {
                   method:  'PUT',
@@ -113,54 +117,12 @@ export default async function handler(req, res) {
                   },
                   body: JSON.stringify({ name: file.name }),
                 });
-                console.log(`[submit-handover] Registered in File Manager: ${mediumId}`);
               } catch (e) {
                 console.warn(`[submit-handover] File Manager registration failed: ${e.message}`);
               }
 
-              // Step 2: GET the File Manager entry to retrieve the real public URL
-              try {
-                await delay(150); // brief pause to allow registration to complete
-                const entryRes  = await fetch(`${BASE_URL}/medialibrary/entries/${mediumId}`, {
-                  method:  'GET',
-                  headers: {
-                    'Authorization': `Basic ${API_TOKEN}`,
-                    'Accept':        'application/json',
-                  },
-                });
-                if (entryRes.ok) {
-                  const entry = await entryRes.json();
-                  console.log(`[submit-handover] File Manager entry keys: ${JSON.stringify(Object.keys(entry?.data || entry || {}))}`);
-                  // Extract URL from the File Manager entry response
-                  fileUrl = entry?.data?.url
-                    || entry?.data?.downloadUrl
-                    || entry?.data?.publicUrl
-                    || entry?.data?.fileUrl
-                    || entry?.url
-                    || entry?.downloadUrl
-                    || entry?.publicUrl
-                    || entry?.fileUrl;
-                  console.log(`[submit-handover] File Manager URL: ${fileUrl}`);
-                } else {
-                  const errText = await entryRes.text();
-                  console.warn(`[submit-handover] File Manager GET failed ${entryRes.status}: ${errText}`);
-                }
-              } catch (e) {
-                console.warn(`[submit-handover] File Manager GET error: ${e.message}`);
-              }
-
-              // Fallback — GET on medialibrary is not supported (405),
-              // so construct from what we have. Use raw/upload with mediumId.
-              if (!fileUrl) {
-                const origExt = file.name.split('.').pop().toLowerCase();
-                fileUrl = medium?.data?.url
-                  || medium?.url
-                  || `${BASE_URL}/media/${mediumId}`;
-                console.log(`[submit-handover] Fallback URL: ${fileUrl}`);
-              }
-
-              uploadedFiles.push({ name: displayName, mediumId, url: fileUrl });
-              console.log(`[submit-handover] Uploaded: ${displayName} → ${fileUrl}`);
+              uploadedFiles.push({ name: file.name, mediumId, url: fileUrl });
+              console.log(`[submit-handover] Uploaded: ${file.name} → ${fileUrl}`);
             }
           } else {
             console.warn(`[submit-handover] Upload failed for ${file.name}: ${uploadText}`);
