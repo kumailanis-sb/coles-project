@@ -97,25 +97,29 @@ export default async function handler(req, res) {
             // Extract URL from Staffbase Media API response.
             // Confirmed response shape: { id, publicID, fileName, resourceInfo, ... }
             // Confirmed public URL pattern:
-            //   https://{instance}/api/media/secure/external/v2/raw/upload/{publicID}.{ext}
+            //   {base}/api/media/secure/external/v2/raw/upload/{encodedPublicID}.{ext}
+            // Note: publicID can contain slashes — must be URL-encoded.
+            // Note: fileName from API may be generic (e.g. "1.webp") — prefer original file.name.
             const publicID     = medium?.data?.publicID || medium?.publicID;
-            const fileName     = medium?.data?.fileName || medium?.fileName || file.name;
-            const ext          = fileName.split('.').pop().toLowerCase();
             const resourceInfo = medium?.data?.resourceInfo || medium?.resourceInfo;
+
+            // Use original file.name for extension — API fileName can be generic like "1.webp"
+            const origExt = file.name.split('.').pop().toLowerCase();
 
             const fileUrl = medium?.data?.url
               || medium?.data?.downloadUrl
               || medium?.url
               || medium?.downloadUrl
-              // Confirmed pattern: publicID + original file extension
+              // Confirmed pattern: URL-encode publicID (may contain slashes) + original extension
               || (publicID
-                  ? `${BASE_URL}/media/secure/external/v2/raw/upload/${publicID}.${ext}`
+                  ? \`\${BASE_URL}/media/secure/external/v2/raw/upload/\${encodeURIComponent(publicID)}.\${origExt}\`
                   : null)
-              // Fallback via resourceInfo
               || resourceInfo?.publicUrl
               || resourceInfo?.url
-              // Last resort: authenticated API URL (may require auth in app)
-              || (mediumId ? `${BASE_URL}/media/${mediumId}` : null);
+              || (mediumId ? \`\${BASE_URL}/media/\${mediumId}\` : null);
+
+            // Use original filename from the upload for display — not the API's fileName
+            const displayName = file.name;
 
             console.log(`[submit-handover] Media response keys: ${JSON.stringify(Object.keys(medium?.data || medium || {}))}`);
             console.log(`[submit-handover] publicID: ${publicID}`);
@@ -136,8 +140,8 @@ export default async function handler(req, res) {
                 console.warn(`[submit-handover] File Manager registration failed: ${e.message}`);
               }
 
-              uploadedFiles.push({ name: file.name, mediumId, url: fileUrl });
-              console.log(`[submit-handover] Uploaded: ${file.name} → ${fileUrl}`);
+              uploadedFiles.push({ name: displayName, mediumId, url: fileUrl });
+              console.log(`[submit-handover] Uploaded: ${displayName} → ${fileUrl}`);
             }
           } else {
             console.warn(`[submit-handover] Upload failed for ${file.name}: ${uploadText}`);
