@@ -1,0 +1,18 @@
+{
+  "name": "coles-shift-handover-backend",
+  "version": "1.0.0",
+  "description": "Shift handover backend — publishes Staffbase News posts on submit",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev":   "vercel dev",
+    "start": "vercel dev"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "vercel": "^32.0.0"
+  }
+}
