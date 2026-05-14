@@ -93,7 +93,21 @@ export default async function handler(req, res) {
           if (uploadRes.ok) {
             const medium   = JSON.parse(uploadText);
             const mediumId = medium?.data?.id || medium?.id;
-            const fileUrl  = medium?.data?.url || medium?.url || medium?.downloadUrl;
+
+            // Extract URL — try every known Staffbase response shape,
+            // then fall back to constructing the download URL from mediumId
+            const fileUrl = medium?.data?.url
+              || medium?.data?.downloadUrl
+              || medium?.data?.fileUrl
+              || medium?.data?.link
+              || medium?.url
+              || medium?.downloadUrl
+              || medium?.fileUrl
+              || medium?.link
+              || (mediumId ? `${BASE_URL}/media/${mediumId}` : null);
+
+            console.log(`[submit-handover] Media response keys: ${JSON.stringify(Object.keys(medium?.data || medium || {}))}`);
+            console.log(`[submit-handover] Extracted URL: ${fileUrl}`);
 
             if (mediumId) {
               // Register in File Manager (best-effort — won't block on failure)
@@ -186,7 +200,8 @@ export default async function handler(req, res) {
     const postContent = buildHandoverHTML(
       {
         storeLabel:      STORE_LABEL,
-        shiftLabel:      shiftLabel || dateLabel,
+        // Strip the store label from shiftLabel if the frontend already included it
+        shiftLabel:      (shiftLabel || dateLabel).replace(STORE_LABEL, '').replace(/^\s*[·\-]\s*/, '').trim() || dateLabel,
         submittedBy:     smName,
         dutyManagerName: dmName,
         submittedAt:     now.toISOString(),

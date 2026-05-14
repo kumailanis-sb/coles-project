@@ -71,7 +71,7 @@ export async function findUserByUsername(username) {
 }
 
 export async function findHandoverChannel(username) {
-  const targetId = buildExternalId(username);
+  const targetId      = buildExternalId(username);
   const installations = await fetchAllPages(`/spaces/${SPACE_ID}/installations`);
   return installations.find(inst => inst.externalID === targetId) || null;
 }
@@ -85,22 +85,14 @@ export function buildChannelTitle(dutyManagerName) {
   return `Shift Handover — ${dutyManagerName}`;
 }
 
-/**
- * buildHandoverHTML
- *
- * Produces plain HTML that Staffbase News renders natively.
- * Uses only: <h2>, <h3>, <p>, <ul>, <li>, <hr>, <strong>, <s>, <a>
- * and minimal inline style= for color only (no layout CSS).
- *
- * @param {object} meta     - { storeLabel, shiftLabel, submittedBy, dutyManagerName, submittedAt }
- * @param {object} sections - { safety, service, stock, online, customer, team }
- *                            each: { notes: string, priority: 'high'|'medium'|'low' }
- * @param {array}  tasks    - [{ section, title, owner, due, priority }]
- * @param {array}  links    - [{ url, label? }]
- * @param {array}  files    - [{ name }]
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// buildHandoverHTML
+// p-only layout with inline styles. No tables, no CSS classes.
+// p elements are block-level and always stretch full width in Staffbase News.
+// Tested on both desktop and mobile.
+// ─────────────────────────────────────────────────────────────────────────────
 export function buildHandoverHTML(meta, sections, tasks, links, files) {
-  const SECTIONS = [
+  const SECTION_CONFIG = [
     { id: 'safety',   label: 'Safety',           icon: '🦺' },
     { id: 'service',  label: 'Service',           icon: '🛒' },
     { id: 'stock',    label: 'Stock',             icon: '📦' },
@@ -109,99 +101,116 @@ export function buildHandoverHTML(meta, sections, tasks, links, files) {
     { id: 'team',     label: 'Team',              icon: '👥' },
   ];
 
-  const PRI_COLOR = { high: '#CC0000', medium: '#B45309', low: '#2E7D32' };
-  const PRI_LABEL = { high: 'High priority', medium: 'Medium priority', low: 'Low priority' };
-  const TASK_ICON = { high: '#CC0000', medium: '#B45309', low: '#2E7D32' };
+  const PRI = {
+    high:   { color: '#CC0000', bg: '#ffffff',  border: '#EAACAC', label: '● HIGH',   hdrBg: '#FDECEA' },
+    medium: { color: '#B45309', bg: '#FEF3C7',  border: '#F0D080', label: '● MEDIUM', hdrBg: '#F7F7F5' },
+    low:    { color: '#2E7D32', bg: '#EAF4EA',  border: '#B7DEB8', label: '● LOW',    hdrBg: '#F7F7F5' },
+  };
 
   const e = (s) => String(s ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-  let html = '';
+  const FONT = 'font-family:Arial,sans-serif;';
 
-  // ── Header ───────────────────────────────────────────────────────────────
-  const date = meta.submittedAt
-    ? new Date(meta.submittedAt).toLocaleString('en-AU', { weekday:'short', day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
+  // Clean up shift label — remove duplicate store name
+  const STORE_LABEL = meta.storeLabel || 'Coles Store';
+  const cleanShift  = (meta.shiftLabel || '')
+    .replace(STORE_LABEL, '').replace(/^\s*[·\-]\s*/, '').trim();
+  const dateStr = meta.submittedAt
+    ? new Date(meta.submittedAt).toLocaleString('en-AU', {
+        weekday: 'long', day: 'numeric', month: 'long',
+        year: 'numeric', hour: '2-digit', minute: '2-digit',
+      })
     : '';
 
-  html += `<p style="font-size:12px;color:#888888;">${e(meta.storeLabel)} &nbsp;·&nbsp; ${e(meta.shiftLabel)} &nbsp;·&nbsp; ${e(date)}</p>`;
-  html += `<p style="font-size:12px;color:#888888;">Submitted by <strong>${e(meta.submittedBy)}</strong> → <strong>${e(meta.dutyManagerName)}</strong></p>`;
-  html += `<hr>`;
+  let html = '';
 
-  // ── Sections ─────────────────────────────────────────────────────────────
-  for (const cfg of SECTIONS) {
-    const sec       = sections?.[cfg.id];
-    const secTasks  = (tasks || []).filter(t => t.section === cfg.id);
-    const hasNotes  = sec?.notes?.trim();
-    const hasTasks  = secTasks.length > 0;
+  // ── Header banner ────────────────────────────────────────────────────────
+  html += `<p style="background-color:#CC0000;padding:16px 18px;border-radius:8px;margin:0 0 10px;${FONT}">` +
+    `<span style="display:block;font-size:12px;font-weight:700;color:rgba(255,255,255,0.65);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:5px;">Shift Handover</span>` +
+    `<span style="display:block;font-size:24px;font-weight:700;color:#ffffff;line-height:1.3;margin-bottom:5px;">${e(STORE_LABEL)} — ${e(cleanShift)}</span>` +
+    `<span style="display:block;font-size:14px;color:rgba(255,255,255,0.72);">${e(dateStr)}</span>` +
+    `</p>`;
 
-    if (!hasNotes && !hasTasks) continue;
+  // ── From / To ─────────────────────────────────────────────────────────────
+  html += `<p style="background-color:#F7F7F5;border-left:3px solid #CC0000;padding:10px 14px;border-radius:0 6px 6px 0;margin:0 0 10px;font-size:17px;color:#5A5A54;${FONT}">` +
+    `From &nbsp;<strong style="color:#1A1A18;">${e(meta.submittedBy)}</strong>&nbsp; → &nbsp;<strong style="color:#1A1A18;">${e(meta.dutyManagerName)}</strong>` +
+    `</p>`;
 
-    const priColor = sec?.priority ? PRI_COLOR[sec.priority] : null;
-    const priLabel = sec?.priority ? PRI_LABEL[sec.priority] : null;
+  // ── Sections ──────────────────────────────────────────────────────────────
+  for (const cfg of SECTION_CONFIG) {
+    const sec      = sections?.[cfg.id];
+    const secTasks = (tasks || []).filter(t => t.section === cfg.id);
+    if (!sec?.notes?.trim() && !secTasks.length) continue;
 
-    // Section heading
-    if (priColor) {
-      html += `<h2>${cfg.icon} ${cfg.label} &nbsp;<span style="font-size:12px;color:${priColor};font-weight:normal;">● ${priLabel}</span></h2>`;
-    } else {
-      html += `<h2>${cfg.icon} ${cfg.label}</h2>`;
+    const p       = sec?.priority;
+    const hdrBg   = p ? PRI[p].hdrBg : '#F7F7F5';
+    const pill    = p
+      ? `<span style="font-size:14px;font-weight:700;color:${PRI[p].color};background-color:${PRI[p].bg};padding:2px 9px;border-radius:20px;border:1px solid ${PRI[p].border};">${PRI[p].label}</span>`
+      : '';
+
+    // Section header p
+    html += `<p style="background-color:${hdrBg};border:1px solid #E2E2DE;border-bottom:none;border-radius:8px 8px 0 0;padding:9px 14px;margin:0;font-size:17px;font-weight:700;color:#1A1A18;${FONT}">` +
+      `${cfg.icon}&nbsp;&nbsp;${cfg.label}&nbsp;&nbsp;${pill}` +
+      `</p>`;
+
+    // Section body p
+    let bodyContent = '';
+
+    if (sec?.notes?.trim()) {
+      bodyContent += `<span style="display:block;font-size:17px;color:#1A1A18;line-height:1.65;margin-bottom:${secTasks.length ? '12px' : '0'};">${e(sec.notes)}</span>`;
     }
 
-    // Notes
-    if (hasNotes) {
-      html += `<p>${e(sec.notes)}</p>`;
+    if (secTasks.length) {
+      bodyContent += `<span style="display:block;font-size:14px;font-weight:700;color:#9A9A92;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:7px;">Tasks</span>`;
+      secTasks.forEach((t, i) => {
+        const done       = !!t.completed;
+        const taskBg     = done ? '#EAF4EA' : '#F7F7F5';
+        const taskBorder = done ? '#B7DEB8'  : '#E2E2DE';
+        const checkBox   = done ? '☑' : '☐';
+        const titleHtml  = done
+          ? `<s style="color:#9A9A92;">${e(t.title)}</s>`
+          : `<strong>${e(t.title)}</strong>`;
+        const priColor = t.priority ? (PRI[t.priority]?.color || '#888') : '#888';
+        const priLabel = t.priority ? t.priority.charAt(0).toUpperCase() + t.priority.slice(1) : '';
+        const metaParts = [
+          t.owner && `👤 ${e(t.owner)}`,
+          t.due   && `🕐 ${e(t.due)}`,
+          priLabel && `<span style="color:${priColor};font-weight:700;">${priLabel}</span>`,
+        ].filter(Boolean).join(' &nbsp;·&nbsp; ');
+
+        bodyContent += `<span style="display:block;${i > 0 ? 'margin-top:5px;' : ''}background-color:${taskBg};border:1px solid ${taskBorder};border-radius:5px;padding:8px 10px;font-size:16px;color:#1A1A18;">` +
+          `${checkBox}&nbsp;&nbsp;${titleHtml}<br>` +
+          `<span style="font-size:15px;color:#5A5A54;">${metaParts}</span>` +
+          `</span>`;
+      });
     }
 
-    // Tasks
-    if (hasTasks) {
-      html += `<p style="font-size:12px;color:#888888;margin-top:10px;"><strong>TASKS</strong></p>`;
-      html += `<ul>`;
-      for (const task of secTasks) {
-        const done     = task.completed;
-        const tc       = TASK_ICON[task.priority] || '#888888';
-        const titleHtml = done ? `<s>${e(task.title)}</s>` : e(task.title);
-        const checkBox  = done ? '☑' : '☐';
-        const metaParts = [];
-        if (task.owner)    metaParts.push(`👤 ${e(task.owner)}`);
-        if (task.due)      metaParts.push(`🕐 ${e(task.due)}`);
-        if (task.priority) metaParts.push(`<span style="color:${tc};">${task.priority.charAt(0).toUpperCase()+task.priority.slice(1)}</span>`);
-        html += `<li>${checkBox} &nbsp;<strong>${titleHtml}</strong>`;
-        if (metaParts.length) {
-          html += `<br><span style="font-size:13px;color:#555555;">${metaParts.join(' &nbsp;·&nbsp; ')}</span>`;
-        }
-        html += `</li>`;
-      }
-      html += `</ul>`;
-    }
-
-    html += `<hr>`;
+    html += `<p style="background-color:#ffffff;border:1px solid #E2E2DE;border-top:none;border-radius:0 0 8px 8px;padding:12px 14px;margin:0 0 10px;${FONT}">${bodyContent}</p>`;
   }
 
   // ── Attachments & links ───────────────────────────────────────────────────
-  // files array now comes from upload-attachments.js response:
-  // [{ name, mediumId, url, fileManagerUrl }]
-  // Each file has a permanent Staffbase CDN url — render as a tappable link.
   const hasFiles = files?.length > 0;
   const hasLinks = links?.length > 0;
 
   if (hasFiles || hasLinks) {
-    html += `<h2>📎 Attachments &amp; procedure links</h2>`;
+    html += `<p style="background-color:#EEF3FA;border:1px solid #C5D5EE;border-bottom:none;border-radius:8px 8px 0 0;padding:9px 14px;margin:0;font-size:17px;font-weight:700;color:#1A3C6E;${FONT}">` +
+      `📎&nbsp;&nbsp;Attachments &amp; procedure links</p>`;
+
+    let attachContent = '';
 
     if (hasFiles) {
       for (const f of files) {
         const ext  = (f.name || '').split('.').pop().toLowerCase();
-        const icon = ext === 'pdf' ? '📄'
-          : ['jpg','jpeg','png','gif','heic','webp'].includes(ext) ? '📷'
+        const icon = ['jpg','jpeg','png','gif','heic','webp'].includes(ext) ? '📷'
+          : ext === 'pdf' ? '📄'
           : ext === 'xlsx' || ext === 'xls' ? '📊'
-          : ext === 'docx' || ext === 'doc' ? '📝'
-          : '📎';
-
+          : ext === 'docx' || ext === 'doc' ? '📝' : '📎';
         if (f.url) {
-          // Uploaded via Media API — render as a clickable link
-          html += `<p>${icon} &nbsp;<a href="${e(f.url)}">${e(f.name)}</a></p>`;
+          attachContent += `<span style="display:block;margin-bottom:6px;font-size:17px;">${icon}&nbsp;&nbsp;<a href="${e(f.url)}" style="color:#1A3C6E;font-weight:600;text-decoration:none;">${e(f.name)}</a></span>`;
         } else {
-          // Fallback: no URL (upload may have failed) — show plain text
-          html += `<p>${icon} &nbsp;${e(f.name)} <span style="color:#888888;font-size:12px;">(attachment unavailable)</span></p>`;
+          attachContent += `<span style="display:block;margin-bottom:6px;font-size:17px;color:#9A9A92;">${icon}&nbsp;&nbsp;${e(f.name)} <em>(upload failed)</em></span>`;
         }
       }
     }
@@ -209,9 +218,11 @@ export function buildHandoverHTML(meta, sections, tasks, links, files) {
     if (hasLinks) {
       for (const link of links) {
         const label = link.label || link.url;
-        html += `<p>🔗 &nbsp;<a href="${e(link.url)}">${e(label)}</a></p>`;
+        attachContent += `<span style="display:block;margin-bottom:6px;font-size:17px;">🔗&nbsp;&nbsp;<a href="${e(link.url)}" style="color:#1A3C6E;font-weight:600;text-decoration:none;">${e(label)}</a></span>`;
       }
     }
+
+    html += `<p style="background-color:#ffffff;border:1px solid #C5D5EE;border-top:none;border-radius:0 0 8px 8px;padding:12px 14px;margin:0 0 10px;${FONT}">${attachContent}</p>`;
   }
 
   return html;
