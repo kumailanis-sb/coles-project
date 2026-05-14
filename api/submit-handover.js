@@ -93,40 +93,15 @@ export default async function handler(req, res) {
           if (uploadRes.ok) {
             const medium   = JSON.parse(uploadText);
             const mediumId = medium?.data?.id || medium?.id;
-
-            // Extract URL from Staffbase Media API response.
-            // Confirmed response shape: { id, publicID, fileName, resourceInfo, ... }
-            // Confirmed public URL pattern:
-            //   {base}/api/media/secure/external/v2/raw/upload/{encodedPublicID}.{ext}
-            // Note: publicID can contain slashes — must be URL-encoded.
-            // Note: fileName from API may be generic (e.g. "1.webp") — prefer original file.name.
-            const publicID     = medium?.data?.publicID || medium?.publicID;
-            const resourceInfo = medium?.data?.resourceInfo || medium?.resourceInfo;
-
-            // Use original file.name for extension — API fileName can be generic like "1.webp"
-            const origExt = file.name.split('.').pop().toLowerCase();
-
-            const fileUrl = medium?.data?.url
-              || medium?.data?.downloadUrl
-              || medium?.url
-              || medium?.downloadUrl
-              // Confirmed pattern: URL-encode publicID (may contain slashes) + original extension
-              || (publicID
-                  ? `${BASE_URL}/media/secure/external/v2/raw/upload/${encodeURIComponent(publicID)}.${origExt}`
-                  : null)
-              || resourceInfo?.publicUrl
-              || resourceInfo?.url
-              || (mediumId ? `${BASE_URL}/media/${mediumId}` : null);
-
-            // Use original filename from the upload for display — not the API's fileName
             const displayName = file.name;
 
             console.log(`[submit-handover] Media response keys: ${JSON.stringify(Object.keys(medium?.data || medium || {}))}`);
-            console.log(`[submit-handover] publicID: ${publicID}`);
-            console.log(`[submit-handover] Extracted URL: ${fileUrl}`);
+            console.log(`[submit-handover] mediumId: ${mediumId}`);
 
             if (mediumId) {
-              // Register in File Manager (best-effort — won't block on failure)
+              let fileUrl = null;
+
+              // Step 1: Register in File Manager
               try {
                 await fetch(`${BASE_URL}/medialibrary/entries/${mediumId}`, {
                   method:  'PUT',
@@ -136,8 +111,51 @@ export default async function handler(req, res) {
                   },
                   body: JSON.stringify({ name: file.name }),
                 });
+                console.log(`[submit-handover] Registered in File Manager: ${mediumId}`);
               } catch (e) {
                 console.warn(`[submit-handover] File Manager registration failed: ${e.message}`);
+              }
+
+              // Step 2: GET the File Manager entry to retrieve the real public URL
+              try {
+                await delay(150); // brief pause to allow registration to complete
+                const entryRes  = await fetch(`${BASE_URL}/medialibrary/entries/${mediumId}`, {
+                  method:  'GET',
+                  headers: {
+                    'Authorization': `Basic ${API_TOKEN}`,
+                    'Accept':        'application/json',
+                  },
+                });
+                if (entryRes.ok) {
+                  const entry = await entryRes.json();
+                  console.log(`[submit-handover] File Manager entry keys: ${JSON.stringify(Object.keys(entry?.data || entry || {}))}`);
+                  // Extract URL from the File Manager entry response
+                  fileUrl = entry?.data?.url
+                    || entry?.data?.downloadUrl
+                    || entry?.data?.publicUrl
+                    || entry?.data?.fileUrl
+                    || entry?.url
+                    || entry?.downloadUrl
+                    || entry?.publicUrl
+                    || entry?.fileUrl;
+                  console.log(`[submit-handover] File Manager URL: ${fileUrl}`);
+                } else {
+                  const errText = await entryRes.text();
+                  console.warn(`[submit-handover] File Manager GET failed ${entryRes.status}: ${errText}`);
+                }
+              } catch (e) {
+                console.warn(`[submit-handover] File Manager GET error: ${e.message}`);
+              }
+
+              // Step 3: Fallback — construct URL from medium response if File Manager didn't return one
+              if (!fileUrl) {
+                const publicID = medium?.data?.publicID || medium?.publicID;
+                const origExt  = file.name.split('.').pop().toLowerCase();
+                fileUrl = medium?.data?.url
+                  || medium?.url
+                  || (publicID ? `${BASE_URL}/media/secure/external/v2/image/upload/${publicID}.${origExt}` : null)
+                  || `${BASE_URL}/media/${mediumId}`;
+                console.log(`[submit-handover] Fallback URL: ${fileUrl}`);
               }
 
               uploadedFiles.push({ name: displayName, mediumId, url: fileUrl });
