@@ -161,8 +161,6 @@ export default async function handler(req, res) {
           localization: {
             en_US: { title: channelTitle },
           },
-          acknowledgingEnabled: true,
-          acknowledgement:      true,
         },
         accessorIDs: [dmId],
       };
@@ -173,12 +171,7 @@ export default async function handler(req, res) {
         channelPayload
       );
 
-      // Log full config response so we can see which fields Staffbase accepted
-      const createdChannel = channelRes?.data || channelRes;
-      console.log(`[submit-handover] Channel created config keys: ${JSON.stringify(Object.keys(createdChannel?.config || {}))}`);
-      console.log(`[submit-handover] Channel config full: ${JSON.stringify(createdChannel?.config)}`);
-
-      channelId = createdChannel?.id;
+      channelId = (channelRes?.data || channelRes)?.id;
 
       if (!channelId) {
         console.error('[submit-handover] Channel creation response:', channelRes);
@@ -190,20 +183,7 @@ export default async function handler(req, res) {
       await delay(200);
     }
 
-    // ── Ensure acknowledgement is enabled on channel (new and existing) ──────
-    // PUT the channel config after creation or reuse to set acknowledgement.
-    // We attempt both known field names since the Spaces API isn't fully documented.
-    try {
-      await staffbaseAPI('PUT', `/spaces/${SPACE_ID}/installations/${channelId}`, {
-        config: {
-          acknowledgingEnabled: true,
-          acknowledgement:      true,
-        },
-      });
-      console.log(`[submit-handover] Acknowledgement config applied to channel: ${channelId}`);
-    } catch (e) {
-      console.warn(`[submit-handover] Could not apply acknowledgement config: ${e.message}`);
-    }
+    // Acknowledgement is enabled per-post via acknowledgingEnabled: true in the post payload.
 
     // ── Step 3: Build post content ──────────────────────────────────────────
     const now       = new Date();
