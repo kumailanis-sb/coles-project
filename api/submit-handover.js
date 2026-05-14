@@ -97,6 +97,8 @@ export default async function handler(req, res) {
 
             console.log(`[submit-handover] Media response keys: ${JSON.stringify(Object.keys(medium?.data || medium || {}))}`);
             console.log(`[submit-handover] mediumId: ${mediumId}`);
+            console.log(`[submit-handover] resourceInfo: ${JSON.stringify(medium?.data?.resourceInfo || medium?.resourceInfo)}`);
+            console.log(`[submit-handover] transformations: ${JSON.stringify(medium?.data?.transformations || medium?.transformations)}`);
 
             if (mediumId) {
               let fileUrl = null;
@@ -147,13 +149,12 @@ export default async function handler(req, res) {
                 console.warn(`[submit-handover] File Manager GET error: ${e.message}`);
               }
 
-              // Step 3: Fallback — construct URL from medium response if File Manager didn't return one
+              // Fallback — GET on medialibrary is not supported (405),
+              // so construct from what we have. Use raw/upload with mediumId.
               if (!fileUrl) {
-                const publicID = medium?.data?.publicID || medium?.publicID;
-                const origExt  = file.name.split('.').pop().toLowerCase();
+                const origExt = file.name.split('.').pop().toLowerCase();
                 fileUrl = medium?.data?.url
                   || medium?.url
-                  || (publicID ? `${BASE_URL}/media/secure/external/v2/image/upload/${publicID}.${origExt}` : null)
                   || `${BASE_URL}/media/${mediumId}`;
                 console.log(`[submit-handover] Fallback URL: ${fileUrl}`);
               }
