@@ -38,7 +38,7 @@ body{font-family:'DM Sans',sans-serif;background:#F0EFEB;color:var(--text-primar
 .tab{flex:1;min-height:var(--tap);border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;border:none;background:transparent;color:var(--text-secondary);transition:all .15s;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px}
 .tab.active{background:var(--surface);color:var(--text-primary);box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .view{display:none}.view.active{display:block}
-.card{background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border);overflow:hidden;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.card{background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border);overflow:visible;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
 .card-header{min-height:60px;display:flex;align-items:center;gap:12px;padding:0 16px;cursor:pointer;user-select:none;-webkit-user-select:none}
 .card.open .card-header{border-bottom:1px solid var(--border)}
 .section-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
@@ -166,7 +166,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 
 /* DM search dropdown */
 .dm-search-wrap{position:relative;margin-bottom:16px}
-.dm-dropdown{position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);z-index:50;box-shadow:0 4px 16px rgba(0,0,0,.1);max-height:240px;overflow-y:auto;display:none}
+.dm-dropdown{position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);z-index:500;box-shadow:0 4px 20px rgba(0,0,0,.15);max-height:280px;overflow-y:auto;display:none;min-width:280px}
 .dm-dropdown.open{display:block}
 .dm-result{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--border)}
 .dm-result:last-child{border-bottom:none}
@@ -386,11 +386,48 @@ window.addEventListener('DOMContentLoaded',()=>{
 
 // ── DM Search ─────────────────────────────────────────────────────────────────
 let dmTimer=null;
+let dmAllResults=[];
+
+function positionDropdown(){
+  const input=document.getElementById('dm-input');
+  const dd=document.getElementById('dm-dropdown');
+  const rect=input.getBoundingClientRect();
+  dd.style.top=(rect.bottom+4)+'px';
+  dd.style.left=rect.left+'px';
+  dd.style.width=rect.width+'px';
+}
+
+function renderDMResults(users, q){
+  const dd=document.getElementById('dm-dropdown');
+  // Client-side filter on top of API results
+  const qLower=q.toLowerCase();
+  const filtered=users.filter(u=>
+    u.displayName.toLowerCase().includes(qLower)||
+    u.email.toLowerCase().includes(qLower)||
+    u.username.toLowerCase().includes(qLower)
+  );
+  if(!filtered.length){
+    dd.innerHTML='<div class="dm-searching">No users found for "'+q+'"</div>';
+    return;
+  }
+  dd.innerHTML=filtered.map(u=>`
+    <div class="dm-result" onclick="selectDM(${JSON.stringify(JSON.stringify(u))})">
+      <div class="dm-av">${u.avatarInitials}</div>
+      <div>
+        <div class="dm-name">${u.displayName}</div>
+        <div class="dm-email">${u.email}</div>
+      </div>
+    </div>`).join('');
+}
+
 function searchDM(q){
   clearTimeout(dmTimer);
   const dd=document.getElementById('dm-dropdown');
   if(!q||q.length<2){dd.classList.remove('open');return;}
-  dd.innerHTML='<div class="dm-searching">Searching…</div>';
+  positionDropdown();
+  // If we already have results, filter them immediately while waiting for API
+  if(dmAllResults.length) renderDMResults(dmAllResults, q);
+  else dd.innerHTML='<div class="dm-searching">Searching…</div>';
   dd.classList.add('open');
   dmTimer=setTimeout(async()=>{
     try{
@@ -400,21 +437,26 @@ function searchDM(q){
         dd.innerHTML='<div class="dm-searching">No users found</div>';
         return;
       }
-      dd.innerHTML=data.users.map(u=>`
-        <div class="dm-result" onclick="selectDM(${JSON.stringify(JSON.stringify(u))})">
-          <div class="dm-av">${u.avatarInitials}</div>
-          <div>
-            <div class="dm-name">${u.displayName}</div>
-            <div class="dm-email">${u.email}</div>
-          </div>
-        </div>`).join('');
+      dmAllResults=data.users;
+      positionDropdown();
+      renderDMResults(dmAllResults, q);
     }catch(e){
       dd.innerHTML='<div class="dm-searching">Search failed — check connection</div>';
     }
-  },400);
+  },350);
 }
 
-function openDropdown(){document.getElementById('dm-dropdown').classList.add('open');}
+function openDropdown(){
+  const q=document.getElementById('dm-input').value;
+  if(q.length>=2){positionDropdown();document.getElementById('dm-dropdown').classList.add('open');}
+}
+
+window.addEventListener('scroll',()=>{
+  if(document.getElementById('dm-dropdown').classList.contains('open')) positionDropdown();
+},true);
+window.addEventListener('resize',()=>{
+  if(document.getElementById('dm-dropdown').classList.contains('open')) positionDropdown();
+});
 
 function selectDM(jsonStr){
   const u=JSON.parse(jsonStr);
