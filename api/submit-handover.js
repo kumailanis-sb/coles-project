@@ -161,6 +161,10 @@ export default async function handler(req, res) {
           localization: {
             en_US: { title: channelTitle },
           },
+          // Enable acknowledgement on the channel so all posts require it
+          // Field name candidates — log the response to confirm which is accepted
+          acknowledgingEnabled: true,
+          acknowledgement:      true,
         },
         accessorIDs: [dmId],
       };
@@ -171,7 +175,12 @@ export default async function handler(req, res) {
         channelPayload
       );
 
-      channelId = channelRes?.data?.id || channelRes?.id;
+      // Log full config response so we can see which fields Staffbase accepted
+      const createdChannel = channelRes?.data || channelRes;
+      console.log(`[submit-handover] Channel created config keys: ${JSON.stringify(Object.keys(createdChannel?.config || {}))}`);
+      console.log(`[submit-handover] Channel config full: ${JSON.stringify(createdChannel?.config)}`);
+
+      channelId = createdChannel?.id;
 
       if (!channelId) {
         console.error('[submit-handover] Channel creation response:', channelRes);
@@ -209,7 +218,7 @@ export default async function handler(req, res) {
       uploadedFiles
     );
 
-    // ── Step 4: Publish post → triggers native push notification ───────────
+    // ── Step 4: Publish post ───────────────────────────────────────────────
     const postPayload = {
       contents: {
         en_US: {
@@ -219,7 +228,8 @@ export default async function handler(req, res) {
           kicker:  'Shift Handover',
         },
       },
-      published:  true,
+      published:            true,
+      notificationChannels: ['push', 'email'],  // push + email on publish
       externalID: `${buildExternalId(dmUsername)}_${Date.now()}`,
     };
 
