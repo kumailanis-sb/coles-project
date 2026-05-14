@@ -397,9 +397,11 @@ function positionDropdown(){
   dd.style.width=rect.width+'px';
 }
 
+// Store DM results in a map keyed by index so onclick never passes JSON through HTML
+const dmResultMap={};
+
 function renderDMResults(users, q){
   const dd=document.getElementById('dm-dropdown');
-  // Client-side filter on top of API results
   const qLower=q.toLowerCase();
   const filtered=users.filter(u=>
     u.displayName.toLowerCase().includes(qLower)||
@@ -410,8 +412,10 @@ function renderDMResults(users, q){
     dd.innerHTML='<div class="dm-searching">No users found for "'+q+'"</div>';
     return;
   }
-  dd.innerHTML=filtered.map(u=>`
-    <div class="dm-result" onclick="selectDM(${JSON.stringify(JSON.stringify(u))})">
+  // Store in map, use numeric index in onclick — no JSON in HTML attributes
+  filtered.forEach((u,i)=>{ dmResultMap[i]=u; });
+  dd.innerHTML=filtered.map((u,i)=>`
+    <div class="dm-result" onclick="selectDM(${i})">
       <div class="dm-av">${u.avatarInitials}</div>
       <div>
         <div class="dm-name">${u.displayName}</div>
@@ -458,8 +462,9 @@ window.addEventListener('resize',()=>{
   if(document.getElementById('dm-dropdown').classList.contains('open')) positionDropdown();
 });
 
-function selectDM(jsonStr){
-  const u=JSON.parse(jsonStr);
+function selectDM(idx){
+  const u=dmResultMap[idx];
+  if(!u){ console.error('selectDM: no user at index',idx); return; }
   state.selectedDM=u;
   document.getElementById('dm-dropdown').classList.remove('open');
   document.getElementById('dm-input').value='';
