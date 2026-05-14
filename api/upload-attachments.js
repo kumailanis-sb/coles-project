@@ -34,7 +34,7 @@
  * }
  */
 
-import { BASE_URL, API_TOKEN, delay } from './_staffbase.js';
+import { BASE_URL, API_TOKEN, delay } from './staffbase-helper.js';
 
 // Max file size we'll accept (10 MB in bytes)
 const MAX_FILE_BYTES = 10 * 1024 * 1024;

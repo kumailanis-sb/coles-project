@@ -32,7 +32,7 @@ import {
   buildHandoverHTML,
   findHandoverChannel,
   delay,
-} from './_staffbase.js';
+} from './staffbase-helper.js';
 
 // Generic store label — no per-store logic needed
 const STORE_LABEL = process.env.STORE_LABEL || 'Coles Store';

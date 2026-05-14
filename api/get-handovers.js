@@ -26,7 +26,7 @@ import {
   HANDOVER_PREFIX,
   fetchAllPages,
   delay,
-} from './_staffbase.js';
+} from './staffbase-helper.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
