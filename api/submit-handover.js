@@ -242,19 +242,24 @@ export default async function handler(req, res) {
         },
       },
       published:            true,
-      notificationChannels: ['push', 'email'],  // push + email on publish
+      notificationChannels: ['push', 'email'],
+      acknowledgingEnabled: true,
       externalID: `${buildExternalId(dmUsername)}_${Date.now()}`,
     };
 
     const postRes = await staffbaseAPI('POST', `/channels/${channelId}/posts`, postPayload);
     const postId  = postRes?.data?.id || postRes?.id;
+    const postData = postRes?.data || postRes;
 
     if (!postId) {
       console.error('[submit-handover] Post creation response:', postRes);
       return res.status(500).json({ error: 'Post created but no ID returned' });
     }
 
+    // Log acknowledgement-related fields from the post response
     console.log(`[submit-handover] Post published: ${postId}`);
+    console.log(`[submit-handover] Post acknowledgingAllowed: ${postData?.acknowledgingAllowed}`);
+    console.log(`[submit-handover] Post acknowledgingEnabled: ${postData?.acknowledgingEnabled}`);
 
     // ── Step 5: Return success ──────────────────────────────────────────────
     const studioBase = 'https://coles.staffbase.rocks/admin/plugin/news';
