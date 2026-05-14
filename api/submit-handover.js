@@ -94,19 +94,31 @@ export default async function handler(req, res) {
             const medium   = JSON.parse(uploadText);
             const mediumId = medium?.data?.id || medium?.id;
 
-            // Extract URL — try every known Staffbase response shape,
-            // then fall back to constructing the download URL from mediumId
+            // Extract URL from Staffbase Media API response.
+            // Confirmed response shape: { id, publicID, fileName, resourceInfo, ... }
+            // Confirmed public URL pattern:
+            //   https://{instance}/api/media/secure/external/v2/raw/upload/{publicID}.{ext}
+            const publicID     = medium?.data?.publicID || medium?.publicID;
+            const fileName     = medium?.data?.fileName || medium?.fileName || file.name;
+            const ext          = fileName.split('.').pop().toLowerCase();
+            const resourceInfo = medium?.data?.resourceInfo || medium?.resourceInfo;
+
             const fileUrl = medium?.data?.url
               || medium?.data?.downloadUrl
-              || medium?.data?.fileUrl
-              || medium?.data?.link
               || medium?.url
               || medium?.downloadUrl
-              || medium?.fileUrl
-              || medium?.link
+              // Confirmed pattern: publicID + original file extension
+              || (publicID
+                  ? `${BASE_URL}/media/secure/external/v2/raw/upload/${publicID}.${ext}`
+                  : null)
+              // Fallback via resourceInfo
+              || resourceInfo?.publicUrl
+              || resourceInfo?.url
+              // Last resort: authenticated API URL (may require auth in app)
               || (mediumId ? `${BASE_URL}/media/${mediumId}` : null);
 
             console.log(`[submit-handover] Media response keys: ${JSON.stringify(Object.keys(medium?.data || medium || {}))}`);
+            console.log(`[submit-handover] publicID: ${publicID}`);
             console.log(`[submit-handover] Extracted URL: ${fileUrl}`);
 
             if (mediumId) {
