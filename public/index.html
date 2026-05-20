@@ -501,7 +501,7 @@ function buildSectionCards(){
   const c=document.getElementById('section-cards');
   SECTIONS.forEach((sec,idx)=>{
     const card=document.createElement('div');
-    card.className='card'+(idx===0?' open':'');
+    card.className='card open';
     card.id='card-'+sec.id;
     card.innerHTML=`
       <div class="card-header" onclick="document.getElementById('card-${sec.id}').classList.toggle('open')">
